@@ -1,0 +1,67 @@
+name: Update Tag and Deploy Docker Image
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      new_tag:
+        description: 'Specify new tag value'
+        required: false
+        default: 'tag 2'
+
+jobs:
+  update-tag:
+    name: Update Tag
+    uses: ./.github/workflows/tag-updater-action.yml
+    with:
+      file_path: 'src/config.txt'
+      old_tag: 'tag 1'
+      new_tag: ${{ github.event.inputs.new_tag || 'tag 2' }}
+      commit_message: "Update tag from tag 1 to ${{ github.event.inputs.new_tag || 'tag 2' }}"
+  
+  build-and-push-docker:
+    name: Build and Push Docker Image
+    needs: update-tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          ref: main
+          # Pull the changes made by the update-tag job
+          fetch-depth: 0
+      
+      - name: Pull latest changes
+        run: git pull origin main
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ github.token }}
+      
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=short
+      
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }} 

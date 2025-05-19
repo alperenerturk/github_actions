@@ -1,0 +1,66 @@
+name: Tag Updater Action
+
+on:
+  workflow_call:
+    inputs:
+      file_path:
+        description: 'Path to the file to be modified'
+        required: true
+        type: string
+        default: 'src/config.txt'
+      old_tag:
+        description: 'Tag to be replaced'
+        required: true
+        type: string
+        default: 'tag 1'
+      new_tag:
+        description: 'New tag value'
+        required: true
+        type: string
+        default: 'tag 2'
+      commit_message:
+        description: 'Commit message for the change'
+        required: false
+        type: string
+        default: 'Update tag in configuration file'
+
+jobs:
+  update-tag:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+        
+      - name: Update tag in file
+        run: |
+          if [ ! -f "${{ inputs.file_path }}" ]; then
+            echo "Error: File ${{ inputs.file_path }} not found"
+            exit 1
+          fi
+          
+          # Replace the tag in the file
+          sed -i "s/${{ inputs.old_tag }}/${{ inputs.new_tag }}/g" ${{ inputs.file_path }}
+          
+          # Verify the changes
+          if grep -q "${{ inputs.new_tag }}" ${{ inputs.file_path }}; then
+            echo "Tag successfully updated to ${{ inputs.new_tag }}"
+          else
+            echo "Error: Failed to update tag"
+            exit 1
+          fi
+      
+      - name: Commit changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add ${{ inputs.file_path }}
+          git commit -m "${{ inputs.commit_message }}"
+          
+      - name: Push changes
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ github.token }}
+          branch: ${{ github.ref_name }} 
